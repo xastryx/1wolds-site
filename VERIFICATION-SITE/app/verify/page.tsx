@@ -3,6 +3,13 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+type Status =
+  | "loading"
+  | "verified"
+  | "already_verified"
+  | "blacklisted"
+  | "error";
+
 export default function VerifyPage() {
   return (
     <Suspense fallback={<Loading />}>
@@ -15,9 +22,7 @@ function VerifyClient() {
   const searchParams = useSearchParams();
   const code = searchParams.get("code");
 
-  const [status, setStatus] = useState<
-    "loading" | "verified" | "already_verified" | "blacklisted" | "error"
-  >("loading");
+  const [status, setStatus] = useState<Status>("loading");
 
   useEffect(() => {
     if (!code) {
@@ -25,7 +30,7 @@ function VerifyClient() {
       return;
     }
 
-    const verifyUser = async () => {
+    async function verifyUser() {
       try {
         // 1️⃣ Exchange OAuth code → JWT
         const tokenRes = await fetch("/api/auth/callback", {
@@ -42,7 +47,7 @@ function VerifyClient() {
 
         // 2️⃣ Call bot verification API
         const verifyRes = await fetch(
-          process.env.NEXT_PUBLIC_BOT_API_URL + "/verify",
+          `${process.env.NEXT_PUBLIC_BOT_API_URL}/verify`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -54,7 +59,8 @@ function VerifyClient() {
 
         if (
           verifyData.success &&
-          ["verified", "already_verified"].includes(verifyData.status)
+          (verifyData.status === "verified" ||
+            verifyData.status === "already_verified")
         ) {
           setStatus(verifyData.status);
         } else if (verifyData.status === "blacklisted") {
@@ -66,35 +72,44 @@ function VerifyClient() {
         console.error(err);
         setStatus("error");
       }
-    };
+    }
 
     verifyUser();
   }, [code]);
 
-  // ---------- UI ----------
   if (status === "loading") return <Loading />;
-
-  if (status === "verified") {
+  if (status === "verified")
     return <Success message="✅ Verification successful!" />;
-  }
-
-  if (status === "already_verified") {
+  if (status === "already_verified")
     return <Success message="✅ You are already verified." />;
-  }
-
-  if (status === "blacklisted") {
+  if (status === "blacklisted")
     return (
       <Error message="🚫 You are banned due to involvement in blacklisted servers." />
     );
-  }
 
   return <Error message="❌ Verification failed. Please try again." />;
 }
 
-// ---------- Components ----------
+/* ---------- Components ---------- */
+
 function Loading() {
   return <p className="text-center mt-20">Verifying…</p>;
 }
 
-function Success({ message }: { message: string }) {
+function Success(props: { message: string }) {
   return (
+    <div className="flex flex-col items-center mt-20">
+      <h1 className="text-2xl font-bold">{props.message}</h1>
+    </div>
+  );
+}
+
+function Error(props: { message: string }) {
+  return (
+    <div className="flex flex-col items-center mt-20">
+      <h1 className="text-2xl font-bold text-red-500">
+        {props.message}
+      </h1>
+    </div>
+  );
+}
