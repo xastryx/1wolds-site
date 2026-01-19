@@ -1,9 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 export default function VerifyPage() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <VerifyClient />
+    </Suspense>
+  );
+}
+
+function VerifyClient() {
   const searchParams = useSearchParams();
   const code = searchParams.get("code");
 
@@ -44,7 +52,6 @@ export default function VerifyPage() {
 
         const verifyData = await verifyRes.json();
 
-        // ✅ FIX IS HERE
         if (
           verifyData.success &&
           ["verified", "already_verified"].includes(verifyData.status)
@@ -65,9 +72,7 @@ export default function VerifyPage() {
   }, [code]);
 
   // ---------- UI ----------
-  if (status === "loading") {
-    return <p className="text-center mt-20">Verifying…</p>;
-  }
+  if (status === "loading") return <Loading />;
 
   if (status === "verified") {
     return <Success message="✅ Verification successful!" />;
@@ -87,18 +92,9 @@ export default function VerifyPage() {
 }
 
 // ---------- Components ----------
-function Success({ message }: { message: string }) {
-  return (
-    <div className="flex flex-col items-center mt-20">
-      <h1 className="text-2xl font-bold">{message}</h1>
-    </div>
-  );
+function Loading() {
+  return <p className="text-center mt-20">Verifying…</p>;
 }
 
-function Error({ message }: { message: string }) {
+function Success({ message }: { message: string }) {
   return (
-    <div className="flex flex-col items-center mt-20">
-      <h1 className="text-2xl font-bold text-red-500">{message}</h1>
-    </div>
-  );
-}
