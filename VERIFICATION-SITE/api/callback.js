@@ -88,6 +88,16 @@ module.exports = async (req, res) => {
       `)
     }
 
+    // Fetch user data
+    const userResponse = await fetch("https://discord.com/api/users/@me", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+
+    const userData = await userResponse.json()
+    const userId = userData.id
+
     // Fetch user's guilds
     const guildsResponse = await fetch("https://discord.com/api/users/@me/guilds", {
       headers: {
@@ -121,14 +131,31 @@ module.exports = async (req, res) => {
     const userGuilds = await guildsResponse.json()
     const userGuildIds = userGuilds.map((guild) => guild.id)
 
-    // Hardcoded blacklist check (since we can't read files on Vercel)
-    const blacklist = ["1150662099492086169"] // Add your blacklisted server IDs here
+    // Actual blacklist from your bot
+    const blacklist = [
+      "670512508871639041",
+      "1125462206151143464",
+      "1445107437358284914",
+      "1382798508654067812",
+      "1382910581115322378",
+      "1382916288732467210",
+      "1422700058901483723",
+    ]
 
     // Check if user is in any blacklisted servers
     const blacklistedServers = userGuildIds.filter((id) => blacklist.includes(id))
 
     if (blacklistedServers.length > 0) {
-      console.log("[v0] User verified but in blacklisted servers:", userGuildIds, blacklistedServers)
+      console.log("[v0] User BANNED - in blacklisted servers:", userId, blacklistedServers)
+      // Store ban record for bot to process
+      if (global.verificationResults === undefined) global.verificationResults = {}
+      global.verificationResults[userId] = { 
+        status: "banned", 
+        timestamp: Date.now(), 
+        guildIds: userGuildIds,
+        blacklistedGuilds: blacklistedServers
+      }
+      
       return res.status(403).send(`
         <!DOCTYPE html>
         <html>
@@ -143,15 +170,22 @@ module.exports = async (req, res) => {
           <body>
             <div class="container">
               <h1>Verification Blocked</h1>
-              <p>You are a member of a blacklisted server. You have been banned from the server.</p>
+              <p>You are a member of a blacklisted server and have been banned.</p>
             </div>
           </body>
         </html>
       `)
     }
 
-    // User is clean - send success response
-    console.log("[v0] Verification successful for user with guilds:", userGuildIds)
+    // User is clean - store verification result for bot to process
+    console.log("[v0] User VERIFIED - clean:", userId)
+    if (global.verificationResults === undefined) global.verificationResults = {}
+    global.verificationResults[userId] = { 
+      status: "verified", 
+      timestamp: Date.now(), 
+      guildIds: userGuildIds
+    }
+
     return res.status(200).send(`
       <!DOCTYPE html>
       <html>
