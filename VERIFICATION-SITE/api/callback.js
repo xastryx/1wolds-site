@@ -1,5 +1,3 @@
-const fs = require("fs")
-
 module.exports = async (req, res) => {
   const { code, state } = req.query
 
@@ -26,48 +24,47 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const CLIENT_ID = process.env.CLIENT_ID
-    const CLIENT_SECRET = process.env.CLIENT_SECRET
-    const GUILD_ID = process.env.GUILD_ID
-    const VERIFICATION_ROLE_ID = process.env.VERIFICATION_ROLE_ID
+    const { handleOAuthCallback } = require("../../handlers/oauthCallbackHandler")
+    const { Client, GatewayIntentBits, Partials } = require("discord.js")
 
-    const tokenResponse = await fetch("https://discord.com/api/oauth2/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        code: code,
-        grant_type: "authorization_code",
-        redirect_uri: process.env.DISCORD_REDIRECT_URI,
-      }),
+    // Create a temporary Discord client for this request
+    const client = new Client({
+      intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+      ],
+      partials: [Partials.Channel, Partials.Message],
     })
 
-    if (!tokenResponse.ok) {
-      throw new Error("Failed to get token")
-    }
+    const result = await handleOAuthCallback(code, state, client)
 
-    const tokenData = await tokenResponse.json()
-    const accessToken = tokenData.access_token
-
-    const guildsResponse = await fetch("https://discord.com/api/users/@me/guilds", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-
-    const guilds = await guildsResponse.json()
-    const blacklistData = fs.readFileSync("./blacklist.json", "utf-8")
-    const blacklist = JSON.parse(blacklistData)
-
-    let isBlacklisted = false
-    for (const guild of guilds) {
-      if (blacklist.includes(guild.id)) {
-        isBlacklisted = true
-        break
-      }
-    }
-
-    if (isBlacklisted) {
-      return res.send(`
+    if (result.success) {
+      return res.status(200).send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Verification Successful</title>
+            <style>
+              body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e; color: #fff; }
+              .container { text-align: center; padding: 40px; background: #16213e; border-radius: 10px; }
+              h1 { color: #00D9FF; }
+              p { color: #a0a0a0; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>Verification Successful!</h1>
+              <p>${result.message}</p>
+              <p>You can close this window now.</p>
+            </div>
+          </body>
+        </html>
+      `)
+    } else {
+      const color = result.banned ? "#ff6b6b" : "#ffaa00"
+      return res.status(400).send(`
         <!DOCTYPE html>
         <html>
           <head>
@@ -75,55 +72,37 @@ module.exports = async (req, res) => {
             <style>
               body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e; color: #fff; }
               .container { text-align: center; padding: 40px; background: #16213e; border-radius: 10px; }
-              h1 { color: #ff6b6b; }
+              h1 { color: ${color}; }
+              p { color: #a0a0a0; }
             </style>
           </head>
           <body>
             <div class="container">
-              <h1>You have been banned</h1>
-              <p>You are a member of a blacklisted server.</p>
+              <h1>Verification Failed</h1>
+              <p>${result.message}</p>
+              <p>You can close this window now.</p>
             </div>
           </body>
         </html>
       `)
     }
-
-    return res.send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Verification Successful</title>
-          <style>
-            body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e; color: #fff; }
-            .container { text-align: center; padding: 40px; background: #16213e; border-radius: 10px; }
-            h1 { color: #00D9FF; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>Verification Successful!</h1>
-            <p>You have been verified. You can close this window.</p>
-          </div>
-        </body>
-      </html>
-    `)
   } catch (error) {
-    console.error(error)
+    console.error("OAuth Callback Error:", error)
     return res.status(500).send(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Verification Error</title>
+          <title>Server Error</title>
           <style>
             body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #1a1a2e; color: #fff; }
             .container { text-align: center; padding: 40px; background: #16213e; border-radius: 10px; }
-            h1 { color: #ffaa00; }
+            h1 { color: #ff6b6b; }
           </style>
         </head>
         <body>
           <div class="container">
-            <h1>Error</h1>
-            <p>An error occurred during verification. Please try again.</p>
+            <h1>Server Error</h1>
+            <p>An error occurred during verification. Please try again later.</p>
           </div>
         </body>
       </html>
